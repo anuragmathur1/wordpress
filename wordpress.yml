@@ -1,0 +1,576 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Wordpress template for prod and NonProd"
+Resources:
+  wpvpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      Tags:
+       - Key: app
+         Value: wordpress
+       - Key: Name
+         Value: wordpressVPC
+
+  wpprivatesubneta:
+    DependsOn: wpvpc
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref wpvpc
+      MapPublicIpOnLaunch: false
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs ]    # Get the first AZ in the list
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-Private-A
+      - Key: app
+        Value: wordpress
+
+  wpprivatesubnetb:
+    DependsOn: wpvpc
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref wpvpc
+      MapPublicIpOnLaunch: false
+      CidrBlock: 10.0.5.0/24
+      AvailabilityZone: !Select [ 1, !GetAZs ]    # Get the first AZ in the list
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-Private-B
+      - Key: app
+        Value: wordpress
+
+  wpprivatesubnetc:
+    DependsOn: wpvpc
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref wpvpc
+      MapPublicIpOnLaunch: false
+      CidrBlock: 10.0.6.0/24
+      AvailabilityZone: !Select [ 2, !GetAZs ]    # Get the first AZ in the list
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-Private-C
+      - Key: app
+        Value: wordpress
+
+  wppublicsubneta:
+    DependsOn: wpvpc
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref wpvpc
+      MapPublicIpOnLaunch: true
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs ]    # Get the first AZ in the list
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-Public-A
+      - Key: app
+        Value: wordpress
+
+  wppublicsubnetb:
+    DependsOn: wpvpc
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref wpvpc
+      MapPublicIpOnLaunch: true
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [ 1, !GetAZs ]    # Get the first AZ in the list
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-Public-B
+      - Key: app
+        Value: wordpress
+
+  wppublicsubnetc:
+    DependsOn: wpvpc
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref wpvpc
+      MapPublicIpOnLaunch: true
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [ 2, !GetAZs ]    # Get the first AZ in the list
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-Public-C
+      - Key: app
+        Value: wordpress
+
+  wpinternetgateway:
+    DependsOn : wpvpc
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: wordpress-IG
+      - Key: app
+        Value: wordpress
+
+  wpattachgateway:
+    DependsOn: wpinternetgateway
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+         Ref: wpvpc
+      InternetGatewayId:
+         Ref: wpinternetgateway
+
+  wppublicroutetable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref wpvpc
+      Tags:
+      - Key: Name
+        Value: wppublicroutetable
+      - Key: app
+        Value: wordpress
+
+  wpdefaultpublicroute:
+    Type: AWS::EC2::Route
+    DependsOn: wpattachgateway
+    Properties:
+      RouteTableId: !Ref wppublicroutetable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref wpinternetgateway
+
+  wppublicsubnetaroutetableassociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref wppublicroutetable
+      SubnetId: !Ref wppublicsubneta
+
+  wppublicsubnetbroutetableassociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref wppublicroutetable
+      SubnetId: !Ref wppublicsubnetb
+
+  wppublicsubnetcroutetableassociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref wppublicroutetable
+      SubnetId: !Ref wppublicsubnetc
+
+  wpprivateroutetable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref wpvpc
+      Tags:
+      - Key: Name
+        Value: wpprivateroutetable
+      - Key: app
+        Value: wordpress
+
+  wpprivatesubnetaroutetableassociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref wpprivateroutetable
+      SubnetId: !Ref wpprivatesubneta
+
+  wpprivatesubnetbroutetableassociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref wpprivateroutetable
+      SubnetId: !Ref wpprivatesubnetb
+
+  wpprivatesubnetcroutetableassociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref wpprivateroutetable
+      SubnetId: !Ref wpprivatesubnetc
+
+  wpnetworkpublicacl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+       VpcId:
+         Ref: wpvpc
+       Tags:
+       - Key: Name
+         Value: wpnetworkpublicacl
+       - Key: app
+         Value: wordpress
+
+  wpnetworkpublicaclegressentry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+       NetworkAclId:
+          Ref: wpnetworkpublicacl
+       RuleNumber: '100'
+       Protocol: "-1"
+       RuleAction: allow
+       Egress: 'true'
+       CidrBlock: 0.0.0.0/0
+       Icmp:
+          Code: "-1"
+          Type: "-1"
+
+  wpnetworkpublicaclingressentry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+       NetworkAclId:
+          Ref: wpnetworkpublicacl
+       RuleNumber: '100'
+       Protocol: "-1"
+       RuleAction: allow
+       Egress: 'false'
+       CidrBlock: 0.0.0.0/0
+       Icmp:
+          Code: "-1"
+          Type: "-1"
+
+  wpPublicSubnetaNetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+          Ref: wppublicsubneta
+      NetworkAclId:
+          Ref: wpnetworkpublicacl
+
+  wpPublicSubnetbNetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+          Ref: wppublicsubnetb
+      NetworkAclId:
+          Ref: wpnetworkpublicacl
+
+  wpPublicSubnetcNetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+          Ref: wppublicsubnetc
+      NetworkAclId:
+          Ref: wpnetworkpublicacl
+
+### Private ACL and subnet Associations
+
+  wpnetworkprivateacl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+       VpcId:
+         Ref: wpvpc
+       Tags:
+       - Key: Name
+         Value: wpnetworkprivateacl
+       - Key: app
+         Value: wordpress
+
+  wpnetworkprivateaclegressentry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+       NetworkAclId:
+          Ref: wpnetworkprivateacl
+       RuleNumber: '100'
+       Protocol: "-1"
+       RuleAction: allow
+       Egress: 'true'
+       CidrBlock: 0.0.0.0/0
+       Icmp:
+          Code: "-1"
+          Type: "-1"
+
+  wpnetworkpublicaclingressentry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+       NetworkAclId:
+          Ref: wpnetworkprivateacl
+       RuleNumber: '100'
+       Protocol: "-1"
+       RuleAction: allow
+       Egress: 'false'
+       CidrBlock: 0.0.0.0/0
+       Icmp:
+          Code: "-1"
+          Type: "-1"
+
+  wpPrivateSubnetaNetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+          Ref: wpprivatesubneta
+      NetworkAclId:
+          Ref: wpnetworkprivateacl
+
+  wpPrivateSubnetbNetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+          Ref: wpprivatesubnetc
+      NetworkAclId:
+          Ref: wpnetworkprivateacl
+
+  wpPrivateSubnetcNetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+          Ref: wpprivatesubnetc
+      NetworkAclId:
+          Ref: wpnetworkprivateacl
+
+## WordPress Instance Profile
+
+  wpInstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AdministratorAccess
+  wpInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        -
+          Ref: "wpInstanceRole"
+
+## WordPress RDS Subnet Group and Instance
+  wprdssg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: WordPress RDS SecurityGroup
+      GroupName: wprdssg
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp: !GetAtt wpvpc.CidrBlock
+          IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+      Tags:
+        - Key: Name
+          Value: wprdssg
+        - Key: app
+          Value: wordpress
+      VpcId:
+        Ref: wpvpc
+
+  wpdbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Wordpress DB Subnet Group"
+      DBSubnetGroupName: "wpdbsubnetgroup"
+      SubnetIds:
+        - !Ref wpprivatesubneta
+        - !Ref wpprivatesubnetb
+        - !Ref wpprivatesubnetc
+      Tags:
+        - Key: Name
+          Value: wpdbSubnetGroup
+        - Key: app
+          Value: wordpress
+
+  wpdb:
+    DependsOn:
+      - wpdbSubnetGroup
+      - wprdssg
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t2.micro
+      SourceRegion: ap-southeast-2
+      DBSubnetGroupName: "wpdbsubnetgroup"
+      VPCSecurityGroups:
+        - !Ref wprdssg
+      AllocatedStorage: 10
+      DBName: wpdb
+      Engine: MySQL
+      EngineVersion: "5.7.22"
+      MasterUserPassword: 'test1234567'
+      MasterUsername: 'wpdbuser'
+      Tags:
+        - Key: Name
+          Value: wpdb
+        - Key: app
+          Value: wordpress
+
+## WordPress ASG , LaunchConfig, SecurityGroup
+
+  wpalbsg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: WordPress Instance SecurityGroup
+      GroupName: wpalbsg
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+      Tags:
+        - Key: Name
+          Value: wpalbsg
+        - Key: app
+          Value: wordpress
+      VpcId:
+        Ref: wpvpc
+
+  wpinstancesg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: WordPress Instance SecurityGroup
+      GroupName: wpinstancesg
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+      Tags:
+        - Key: Name
+          Value: wpinstancesg
+        - Key: app
+          Value: wordpress
+      VpcId:
+        Ref: wpvpc
+
+  wpinstancealb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: wpinstancealb
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref wpalbsg
+      Subnets:
+        - !Ref wppublicsubneta
+        - !Ref wppublicsubnetb
+        - !Ref wppublicsubnetc
+      Tags:
+        - Key: Name
+          Value: wpinstancealb
+        - Key: app
+          Value: wordpress
+
+  wpalbtg:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: '/'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200-299'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref wpvpc
+      TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: 60
+
+  wpalblistener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn:
+            !Ref wpalbtg
+          Type: forward
+      LoadBalancerArn:
+        !Ref wpinstancealb
+      Port: 80
+      Protocol: HTTP
+
+  wpserverasg:
+    Type : AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - Ref: wppublicsubneta
+        - Ref: wppublicsubnetb
+        - Ref: wppublicsubnetc
+      # AvailabilityZones:
+      #   Fn::GetAZs:
+      #     Ref: "AWS::Region"
+      DesiredCapacity: 1
+      MaxSize: 2
+      MinSize: 1
+      TargetGroupARNs:
+        - !Ref wpalbtg
+      LaunchConfigurationName:
+        Ref: wpserverlaunchconfig
+      Tags:
+        - Key: Name
+          Value: wpinstance
+          PropagateAtLaunch: true
+        - Key: app
+          Value: wordpress
+          PropagateAtLaunch: true
+
+  wpserverlaunchconfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: "ami-0f8cfaae3a71e096b"
+      KeyName: aws1
+      # UserData:
+      #   Fn::Base64:
+      #     Ref: "WebServerPort"
+      SecurityGroups:
+        - Ref: wpinstancesg
+      InstanceType: "t2.micro"
+
+
+
+    # "WebServerGroup" : {
+    #   "Type" : "AWS::AutoScaling::AutoScalingGroup",
+    #   "Properties" : {
+    #     "VPCZoneIdentifier" : { "Ref" : "Subnets" },
+    #     "LaunchConfigurationName" : { "Ref" : "LaunchConfig" },
+    #     "MinSize" : "1",
+    #     "MaxSize" : "5",
+    #     "DesiredCapacity" : { "Ref" : "WebServerCapacity" },
+    #     "TargetGroupARNs" : [ { "Ref" : "ALBTargetGroup" } ]
+    #   },
+    #   "CreationPolicy" : {
+    #     "ResourceSignal" : {
+    #       "Timeout" : "PT15M"
+    #     }
+    #   },
+    #   "UpdatePolicy": {
+    #     "AutoScalingRollingUpdate": {
+    #       "MinInstancesInService": "1",
+    #       "MaxBatchSize": "1",
+    #       "PauseTime" : "PT15M",
+    #       "WaitOnResourceSignals": "true"
+    #     }
+    #   }
+    # },
+
+
+
+  #
+  # wpinstancesg
+  #
+  # wprdssg
+  #
+  # wpinstanceprofile
+  # wpasg:
+  #   Type: "AWS::EC2::Instance"
+  #   ImageId: ami-0dc96254d5535925f
+  #   InstanceType: t2.micro
+  #   KeyName: wp-prod
+  # wprds:
+  #   Type: "AWS::RDS::DBInstance"
+  #   Properties:
+  #     AllocatedStorage : "50"
+  #     DBInstanceClass: db.t3.small
+  #     Engine: MySQL
+  #     EngineVersion: "5.7.22"
+  #     MasterUserPassword:
+  #       Ref: DBPassword
+  #     MasterUsername:
+  #       Ref: DBUser
+  #
