@@ -9,9 +9,20 @@ Parameters:
     # Default: '1'
   env:
     Type: String
+    AllowedValues:
+      - dev
+      - prod
     # Default: 'dev'
   wpuserdata:
     Type: String
+  # rdsInstanceType:
+  #   Type: String
+  # ec2InstanceType:
+  #   Type: String
+
+Conditions:
+  IsProd: !Equals [ !Ref env, prod ]
+  IsDev: !Equals [ !Ref env, dev ]
 
 Resources:
   wpvpc:
@@ -427,7 +438,40 @@ Resources:
       - wpdbSubnetGroup
       - wprdssg
     Type: AWS::RDS::DBInstance
+    Condition: IsProd
     Properties:
+      MultiAZ: true
+      DBInstanceIdentifier: !Sub
+        - wp-${envtype}
+        - { envtype: !Ref env }
+      DBInstanceClass: db.t2.large
+      SourceRegion: ap-southeast-2
+      DBSubnetGroupName: "wpdbsubnetgroup"
+      VPCSecurityGroups:
+        - !Ref wprdssg
+      AllocatedStorage: 20
+      DBName: '{{resolve:ssm:wpdb:1}}'
+      Engine: MySQL
+      EngineVersion: "5.7.22"
+      MasterUserPassword: '{{resolve:ssm-secure:wpdbpasswd:1}}'
+      MasterUsername: '{{resolve:ssm:wpdbuser:1}}'
+      Tags:
+        - Key: Name
+          Value: wpdb
+        - Key: app
+          Value: wordpress
+
+  wpdb:
+    DependsOn:
+      - wpdbSubnetGroup
+      - wprdssg
+    Type: AWS::RDS::DBInstance
+    Condition: IsDev
+    Properties:
+      MultiAZ: false
+      DBInstanceIdentifier: !Sub
+        - wp-${envtype}
+        - { envtype: !Ref env }
       DBInstanceClass: db.t2.micro
       SourceRegion: ap-southeast-2
       DBSubnetGroupName: "wpdbsubnetgroup"
@@ -444,7 +488,6 @@ Resources:
           Value: wpdb
         - Key: app
           Value: wordpress
-
 ## WordPress ASG , LaunchConfig, SecurityGroup
 
   wpalbsg:
@@ -538,6 +581,8 @@ Resources:
 
   wpserverasg:
     Type : AWS::AutoScaling::AutoScalingGroup
+    DependsOn: wpdb
+    Condition: IsDev
     DependsOn:
       - wpinstancesg
       - wpalbsg
@@ -551,6 +596,36 @@ Resources:
       #     Ref: "AWS::Region"
       DesiredCapacity: 1
       MaxSize: 2
+      MinSize: 1
+      TargetGroupARNs:
+        - !Ref wpalbtg
+      LaunchConfigurationName:
+        Ref: wpserverlaunchconfig
+      Tags:
+        - Key: Name
+          Value: wpinstance
+          PropagateAtLaunch: true
+        - Key: app
+          Value: wordpress
+          PropagateAtLaunch: true
+
+  wpserverasg:
+    Type : AWS::AutoScaling::AutoScalingGroup
+    DependsOn: wpdb
+    Condition: IsProd
+    DependsOn:
+      - wpinstancesg
+      - wpalbsg
+    Properties:
+      VPCZoneIdentifier:
+        - Ref: wppublicsubneta
+        - Ref: wppublicsubnetb
+        - Ref: wppublicsubnetc
+      # AvailabilityZones:
+      #   Fn::GetAZs:
+      #     Ref: "AWS::Region"
+      DesiredCapacity: 2
+      MaxSize: 6
       MinSize: 1
       TargetGroupARNs:
         - !Ref wpalbtg
