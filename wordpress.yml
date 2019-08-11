@@ -1,5 +1,34 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "Wordpress template for prod and NonProd"
+
+Parameters:
+  wpuserdata:
+    Type: String
+    Default: |
+      #!/bin/bash
+      sudo yum install -y jq httpd
+      wget https://wordpress.org/latest.tar.gz
+      tar -xzf latest.tar.gz
+      cp wordpress/wp-config-sample.php wordpress/wp-config.php
+      wpdb=`aws ssm get-parameter --name wpdb --with-decryption --region=ap-southeast-2 | jq .Parameter.Value`
+      wpdbuser=`aws ssm get-parameter --name wpdbuser --with-decryption --region=ap-southeast-2 | jq .Parameter.Value`
+      wpdbhost=`aws ssm get-parameter --name wpdbhost --with-decryption --region=ap-southeast-2 | jq .Parameter.Value`
+      wpdbpasswd=`aws ssm get-parameter --name wpdbpasswd --with-decryption --region=ap-southeast-2 | jq .Parameter.Value`
+      sed -i "s/define( 'DB_NAME', 'database_name_here' )/define( 'DB_NAME', ${wpdb} )/g" wp-config.php
+      sed -i "s/define( 'DB_USER', 'username_here' )/define( 'DB_USER', ${wpdbuser} )/g" wp-config.php
+      sed -i "s/define( 'DB_PASSWORD', 'password_here' )/define( 'DB_PASSWORD', ${wpdbpasswd} )/g" wp-config.php
+      sed -i "s/define( 'DB_HOST', 'localhost' )/define( 'DB_HOST', ${wpdbhost} )/g" wp-config.php
+      sed -i '/put your unique phrase here/d' wp-config.php
+      curl https://api.wordpress.org/secret-key/1.1/salt/ >> wp-config.php
+      sudo cp -r wordpress/* /var/www/html/
+      sudo chown -R apache /var/www
+      sudo chgrp -R apache /var/www
+      sudo chmod 2775 /var/www
+      find /var/www -type d -exec sudo chmod 2775 {} \;
+      find /var/www -type f -exec sudo chmod 0664 {} \;
+      sudo systemctl restart httpd
+      sudo systemctl enable httpd
+
 Resources:
   wpvpc:
     Type: AWS::EC2::VPC
@@ -34,7 +63,7 @@ Resources:
       VpcId: !Ref wpvpc
       MapPublicIpOnLaunch: false
       CidrBlock: 10.0.5.0/24
-      AvailabilityZone: !Select [ 1, !GetAZs ]    # Get the first AZ in the list
+      AvailabilityZone: !Select [ 1, !GetAZs ]    # Get the second AZ in the list
       Tags:
       - Key: Name
         Value: !Sub ${AWS::StackName}-Private-B
@@ -48,7 +77,7 @@ Resources:
       VpcId: !Ref wpvpc
       MapPublicIpOnLaunch: false
       CidrBlock: 10.0.6.0/24
-      AvailabilityZone: !Select [ 2, !GetAZs ]    # Get the first AZ in the list
+      AvailabilityZone: !Select [ 2, !GetAZs ]    # Get the third AZ in the list
       Tags:
       - Key: Name
         Value: !Sub ${AWS::StackName}-Private-C
@@ -201,9 +230,7 @@ Resources:
        RuleAction: allow
        Egress: 'true'
        CidrBlock: 0.0.0.0/0
-       Icmp:
-          Code: "-1"
-          Type: "-1"
+
 
   wpnetworkpublicaclingressentry:
     Type: AWS::EC2::NetworkAclEntry
@@ -270,7 +297,7 @@ Resources:
           Code: "-1"
           Type: "-1"
 
-  wpnetworkpublicaclingressentry:
+  wpnetworkprivateaclingressentry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
        NetworkAclId:
@@ -487,6 +514,9 @@ Resources:
 
   wpserverasg:
     Type : AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - wpinstancesg
+      - wpalbsg
     Properties:
       VPCZoneIdentifier:
         - Ref: wppublicsubneta
@@ -515,9 +545,9 @@ Resources:
     Properties:
       ImageId: "ami-0f8cfaae3a71e096b"
       KeyName: aws1
-      # UserData:
-      #   Fn::Base64:
-      #     Ref: "WebServerPort"
       SecurityGroups:
         - Ref: wpinstancesg
       InstanceType: "t2.micro"
+      UserData:
+        Fn::Base64:
+          Ref: wpuserdata
