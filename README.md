@@ -12,4 +12,4 @@
   
 Usage : 
   1. clone the repo
-  2. ./deploy.sh <env> ## Only dev and prod allowed right now.
+  2. ./deploy.sh <<env>> ## Only dev and prod allowed right now.
