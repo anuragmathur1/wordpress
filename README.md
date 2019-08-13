@@ -12,4 +12,5 @@
   
 Usage : 
   1. clone the repo
-  2. ./deploy.sh dev ## Only dev and prod allowed right now.
+  2. cd wordpress
+  3. ./deploy.sh dev ## Only dev and prod allowed right now.
